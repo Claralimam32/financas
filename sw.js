@@ -1,4 +1,4 @@
-const V="mvf-c7e62332",APP=["./","index.html","manifest.json","icon-192.png","icon-512.png","icon-maskable-512.png"];
+const V="mvf-g2511160",APP=["./","index.html","manifest.json","icon-192.png","icon-512.png","icon-maskable-512.png"];
 self.addEventListener("install",e=>{e.waitUntil(caches.open(V).then(c=>c.addAll(APP.map(u=>new Request(u,{cache:"reload"})))).then(()=>self.skipWaiting()))});
 self.addEventListener("activate",e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k.startsWith("mvf-")&&k!==V).map(k=>caches.delete(k)))).then(()=>self.clients.claim()))});
 self.addEventListener("fetch",e=>{const r=e.request;if(r.method!=="GET")return;

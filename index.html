@@ -543,12 +543,18 @@ render();
 function sync(t){const e=$("sync");if(e)e.textContent=t}
 let smp=null;
 const GK="gemini.key",GM="gemini.model",gGet=k=>{try{return localStorage.getItem(k)||""}catch(e){return""}};
-async function gem(body){if(!navigator.onLine){const e=new Error("offline");e.code="offline";throw e}
- const m=gGet(GM)||"gemini-flash-latest";
- const r=await fetch("https://generativelanguage.googleapis.com/v1beta/models/"+encodeURIComponent(m)+":generateContent",{method:"POST",headers:{"Content-Type":"application/json","x-goog-api-key":gGet(GK)},body:JSON.stringify(body)});
- const j=await r.json().catch(()=>({}));
- if(!r.ok){const t=JSON.stringify(j),e=new Error(t);e.code=r.status===429?"rate_limited":/API_KEY|API key/i.test(t)?"bad_key":r.status===404?"no_model":"x";throw e}
- const c=(j.candidates||[])[0];if(!c||!c.content){const e=new Error("vazio");e.code="blocked";throw e}
+async function gem(body,ms){if(!navigator.onLine){const e=new Error("offline");e.code="offline";throw e}
+ const pref=gGet(GM),mods=pref?[pref]:["gemini-flash-latest","gemini-2.5-flash","gemini-2.0-flash"];let j,last;
+ for(const m of mods){const ac=new AbortController(),tm=setTimeout(()=>ac.abort(),ms||45000);let r;
+  try{r=await fetch("https://generativelanguage.googleapis.com/v1beta/models/"+encodeURIComponent(m)+":generateContent",{method:"POST",headers:{"Content-Type":"application/json","x-goog-api-key":gGet(GK)},body:JSON.stringify(body),signal:ac.signal});
+   j=await r.json().catch(()=>({}))}
+  catch(x){const e=new Error(ac.signal.aborted?"O Google não respondeu em "+Math.round((ms||45000)/1000)+" s (modelo "+m+")":"Falha de rede ("+(x&&x.message||x)+"). Bloqueador de anúncios, VPN ou rede pode estar barrando generativelanguage.googleapis.com");e.code=ac.signal.aborted?"timeout":"net";throw e}
+  finally{clearTimeout(tm)}
+  if(r.ok)break;
+  const t=(j&&j.error&&j.error.message)||JSON.stringify(j),e=new Error("HTTP "+r.status+" · "+m+" · "+t);e.code=r.status===429?"rate_limited":/API_KEY|API key/i.test(t)?"bad_key":r.status===404?"no_model":"x";last=e;
+  if(e.code!=="no_model")throw e}
+ if(last&&last.code==="no_model"&&!(j&&j.candidates))throw last
+ const c=(j.candidates||[])[0];if(!c||!c.content){const e=new Error("Resposta vazia do Gemini"+(c&&c.finishReason?" ("+c.finishReason+")":""));e.code="blocked";throw e}
  return (c.content.parts||[]).map(p=>p.text||"").join("")}
 async function getSmp(){if(!gGet(GK))return null;
  const s=async(msgs,o)=>{const text=await gem({contents:msgs.map(m=>({role:m.role==="assistant"?"model":"user",parts:[{text:m.content}]}))});if(o&&o.onText)o.onText({text});return{text}};
@@ -560,7 +566,7 @@ function ctx(){const c=calc(),m=ymOf(0);
   dividas:S.debts.filter(d=>d.bal>0).map(d=>({nome:d.name,saldo:d.bal,juros_mes_pct:d.rate,parcela_min:d.min,dia:d.day})),
   gastos_ultimos_60_dias:S.exp.filter(e=>e.date>=fmt(addD(-60))).map(e=>({nome:e.name,valor:e.v,categoria:e.cat,forma:e.pay,parcelas:e.n||1,data:e.date})),
   metas:S.goals.map(g=>({nome:g.name,meta:g.target,juntado:g.saved}))})}
-const aiErr=e=>'<div class="bad">'+(e&&e.code==="offline"?"Sem internet agora. A IA precisa de conexão; o resto do app funciona offline.":e&&e.code==="bad_key"?"A chave do Gemini não funcionou. Confira em Mais › IA (Google Gemini).":e&&e.code==="no_model"?"Modelo do Gemini não encontrado. Confira o nome do modelo em Mais › IA.":e&&e.code==="blocked"?"O Gemini não respondeu a essa pergunta. Tente escrever de outro jeito.":e&&e.code==="not_granted"?"A permissão foi negada. Toque de novo e permita.":e&&e.code==="rate_limited"?"Muitos pedidos seguidos. Espere um pouco.":"Não consegui agora. Tente de novo em instantes.")+'</div>';
+const aiErr=e=>'<div class="bad">'+(e&&e.code==="offline"?"Sem internet agora. A IA precisa de conexão; o resto do app funciona offline.":e&&e.code==="bad_key"?"A chave do Gemini não funcionou. Confira em Mais › IA (Google Gemini).":e&&e.code==="no_model"?"Modelo do Gemini não encontrado. Confira o nome do modelo em Mais › IA.":e&&e.code==="blocked"?"O Gemini não respondeu a essa pergunta. Tente escrever de outro jeito.":e&&e.code==="not_granted"?"A permissão foi negada. Toque de novo e permita.":e&&e.code==="rate_limited"?"Muitos pedidos seguidos. Espere um pouco.":e&&e.code==="timeout"?"O Google demorou demais para responder. Tente de novo.":e&&e.code==="net"?"Não consegui falar com o Google. Desligue bloqueador de anúncios/VPN e tente de novo.":"Não consegui agora. Tente de novo em instantes.")+(e&&e.message&&e.code!=="offline"?'<div class="mt" style="font-size:12px;margin-top:6px;word-break:break-word">Detalhe: '+esc(String(e.message).slice(0,300))+'</div>':"")+'</div>';
 const box=t=>'<div class="it" style="display:block;white-space:pre-wrap">'+esc(t)+'</div>';
 $("cb").onclick=async()=>{const q=$("cq").value.trim();if(!q)return;const o=$("co");o.innerHTML='<div class="mt">Pensando…</div>';
  const s=await getSmp();if(!s){o.innerHTML='<div class="bad">Para usar a IA, cole sua chave grátis do Gemini em Mais › IA (Google Gemini).</div>';return}
@@ -612,7 +618,7 @@ $("gkS").onclick=async()=>{const k=$("gkI").value.trim(),m=$("gmI").value.trim()
  if(falhou||(k&&!gGet(GK))){o.innerHTML='<div class="bad">O celular não deixou guardar a chave. Abra o app pelo ícone instalado (não por aba anônima) e tente de novo.</div>';return}
  if(!gGet(GK)){o.innerHTML='<div class="bad">Cole a chave no campo acima primeiro.</div>';return}
  gkSt();o.innerHTML='<div class="mt">Testando…</div>';
- try{await gem({contents:[{role:"user",parts:[{text:"Responda só: ok"}]}]});o.innerHTML='<div class="ok">✅ IA funcionando! Use a aba IA.</div>'}catch(e){o.innerHTML=aiErr(e)}};
+ try{await gem({contents:[{role:"user",parts:[{text:"Responda só: ok"}]}]},45000);o.innerHTML='<div class="ok">✅ IA funcionando! Use a aba IA.</div>'}catch(e){o.innerHTML=aiErr(e)}};
 $("gkX").onclick=()=>{if(!sure($("gkX"),"Confirmar?"))return;try{localStorage.removeItem(GK)}catch(e){}gkSt();$("gkO").innerHTML='<div class="mt">Chave removida deste celular.</div>'};
 gkSt();
 // ---------- Modo offline ----------
