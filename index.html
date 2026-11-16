@@ -194,7 +194,8 @@ textarea{width:100%;padding:11px;border:1px solid var(--ln);border-radius:12px;b
   <div class="card"><h2>🔔 Avisos de vencimento</h2><p class="mt" style="margin-top:0">O celular avisa quando uma dívida ou conta fixa vence hoje, amanhã ou está atrasada.</p>
     <button id="ntB" style="width:100%">Ativar avisos</button><div id="ntO" class="mt" style="margin-top:8px" aria-live="polite"></div></div>
   <div class="card"><h2>✨ IA (Google Gemini)</h2><p class="mt" style="margin-top:0">Crie uma chave grátis em <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style="color:var(--pu);font-weight:700">aistudio.google.com/apikey</a> e cole aqui. Ela fica guardada só neste celular.</p>
-    <label>Chave da API<input id="gkI" type="password" autocomplete="off" placeholder="Cole sua chave aqui"></label>
+    <div id="gkM" style="margin-bottom:8px"></div>
+    <label>Chave da API<input id="gkI" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Cole sua chave aqui"></label>
     <details style="margin-top:8px"><summary style="font-size:13px">Avançado</summary><label style="margin-top:6px">Modelo<input id="gmI" placeholder="gemini-flash-latest"></label></details>
     <div class="qa" style="margin-top:8px"><button id="gkS">Salvar e testar</button><button class="s" id="gkX" style="color:var(--rd)">Remover chave</button></div>
     <div id="gkO" style="margin-top:8px" aria-live="polite"></div></div>
@@ -604,16 +605,21 @@ $("ntB").onclick=async()=>{if(Notification.permission!=="granted"){const r=await
  const n=await avMostrar(true);if(!n){const reg=await navigator.serviceWorker.ready;reg.showNotification("Avisos funcionando ✅",{body:"Nada vencendo hoje ou amanhã.",icon:"icon-192.png"})}};
 const _render=render;render=function(){_render();avGuardar()};avGuardar();
 // ---------- Chave do Gemini ----------
-function gkSt(){const k=gGet(GK);$("gkI").value="";$("gkI").placeholder=k?"Chave salva (…"+k.slice(-4)+")":"Cole sua chave aqui";$("gmI").value=gGet(GM);$("gkX").hidden=!k}
+function gkSt(){const k=gGet(GK);$("gkI").value="";$("gkI").placeholder=k?"Para trocar, cole uma chave nova":"Cole sua chave aqui";$("gmI").value=gGet(GM);$("gkX").hidden=!k;
+ $("gkM").innerHTML=k?'<div class="ok">🔑 Chave salva neste celular (termina em <b>'+esc(k.slice(-4))+'</b>)</div>':'<div class="mt">Nenhuma chave salva ainda.</div>'}
 $("gkS").onclick=async()=>{const k=$("gkI").value.trim(),m=$("gmI").value.trim(),o=$("gkO");
- try{if(k)localStorage.setItem(GK,k);if(m)localStorage.setItem(GM,m);else localStorage.removeItem(GM)}catch(e){}
- if(!gGet(GK)){o.innerHTML='<div class="bad">Cole a chave primeiro.</div>';return}
+ let falhou=false;try{if(k)localStorage.setItem(GK,k.replace(/\s+/g,""));if(m)localStorage.setItem(GM,m);else localStorage.removeItem(GM)}catch(e){falhou=true}
+ if(falhou||(k&&!gGet(GK))){o.innerHTML='<div class="bad">O celular não deixou guardar a chave. Abra o app pelo ícone instalado (não por aba anônima) e tente de novo.</div>';return}
+ if(!gGet(GK)){o.innerHTML='<div class="bad">Cole a chave no campo acima primeiro.</div>';return}
  gkSt();o.innerHTML='<div class="mt">Testando…</div>';
  try{await gem({contents:[{role:"user",parts:[{text:"Responda só: ok"}]}]});o.innerHTML='<div class="ok">✅ IA funcionando! Use a aba IA.</div>'}catch(e){o.innerHTML=aiErr(e)}};
 $("gkX").onclick=()=>{if(!sure($("gkX"),"Confirmar?"))return;try{localStorage.removeItem(GK)}catch(e){}gkSt();$("gkO").innerHTML='<div class="mt">Chave removida deste celular.</div>'};
 gkSt();
 // ---------- Modo offline ----------
-if("serviceWorker" in navigator){navigator.serviceWorker.register("sw.js").then(()=>{avStatus();avAgendar();avGuardar();avMostrar(false)}).catch(()=>avStatus())}else avStatus();
+if("serviceWorker" in navigator){let tinha=!!navigator.serviceWorker.controller,rec=false;
+ navigator.serviceWorker.addEventListener("controllerchange",()=>{if(tinha&&!rec){rec=true;location.reload()}});
+ document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")navigator.serviceWorker.getRegistration().then(r=>r&&r.update()).catch(()=>{})});
+ navigator.serviceWorker.register("sw.js",{updateViaCache:"none"}).then(()=>{avStatus();avAgendar();avGuardar();avMostrar(false)}).catch(()=>avStatus())}else avStatus();
 </script>
 </body>
 </html>

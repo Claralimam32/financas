@@ -1,11 +1,11 @@
-const V="mvf-9c2d2fa4",APP=["./","index.html","manifest.json","icon-192.png","icon-512.png","icon-maskable-512.png"];
-self.addEventListener("install",e=>{e.waitUntil(caches.open(V).then(c=>c.addAll(APP)).then(()=>self.skipWaiting()))});
+const V="mvf-c7e62332",APP=["./","index.html","manifest.json","icon-192.png","icon-512.png","icon-maskable-512.png"];
+self.addEventListener("install",e=>{e.waitUntil(caches.open(V).then(c=>c.addAll(APP.map(u=>new Request(u,{cache:"reload"})))).then(()=>self.skipWaiting()))});
 self.addEventListener("activate",e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k.startsWith("mvf-")&&k!==V).map(k=>caches.delete(k)))).then(()=>self.clients.claim()))});
 self.addEventListener("fetch",e=>{const r=e.request;if(r.method!=="GET")return;
  const u=new URL(r.url);
  if(u.origin===location.origin){ // app: usa o que está guardado e atualiza por trás
   e.respondWith(caches.open(V).then(async c=>{const hit=await c.match(r,{ignoreSearch:true})||(r.mode==="navigate"?await c.match("index.html"):null);
-   const net=fetch(r).then(res=>{if(res.ok)return c.put(r,res.clone()).then(()=>res);return res}).catch(()=>hit);e.waitUntil(net.catch(()=>{}));return hit||net}));return}
+   const net=fetch(r,{cache:"no-cache"}).then(res=>{if(res.ok)return c.put(r,res.clone()).then(()=>res);return res}).catch(()=>hit);e.waitUntil(net.catch(()=>{}));return hit||net}));return}
  if(/fonts\.(googleapis|gstatic)\.com$/.test(u.hostname)){ // fontes: guarda para usar offline
   e.respondWith(caches.open(V+"-fontes").then(async c=>(await c.match(r))||fetch(r).then(res=>{c.put(r,res.clone());return res})))}});
 async function avisar(){const c=await caches.open("avisos"),r=await c.match("avisos.json");if(!r)return;
