@@ -203,7 +203,7 @@ textarea{width:100%;padding:11px;border:1px solid var(--ln);border-radius:12px;b
   <div class="card"><h2>Seus dados</h2><p class="mt">Seus dados ficam salvos neste celular. Ligue o backup automático no Google Drive (abaixo) ou exporte um backup de vez em quando e guarde em lugar seguro.</p>
     <div class="qa"><button class="s" id="bk">Exportar backup</button><button class="s" id="rs" style="color:var(--rd)">Apagar tudo</button></div>
     <div id="bkW" hidden style="margin-top:10px"><label>Seu backup (copie e guarde)<textarea id="bkT" rows="5" readonly></textarea></label><button id="bkC" style="margin-top:6px;width:100%">Copiar backup</button></div></div>
-  <div class="card"><h2>☁️ Backup automático no Google Drive</h2><p class="mt" style="margin-top:0">Igual ao WhatsApp: o app guarda uma cópia dos seus dados no <b>seu</b> Google Drive sozinho (ao abrir e ao sair do app, quando algo mudou). Fica na pasta “Minha Vida Financeira - backups”, com os 30 últimos.</p>
+  <div class="card"><h2>☁️ Backup automático no Google Drive</h2><p class="mt" style="margin-top:0">Igual ao WhatsApp: o app guarda uma cópia dos seus dados no <b>seu</b> Google Drive sozinho (ao abrir e ao sair do app, quando algo mudou). Fica sempre no mesmo arquivo, “financas-backup.json”, dentro da pasta “Minha Vida Financeira - backups” (o Drive guarda as versões anteriores).</p>
     <div id="dvM" style="margin-bottom:8px"></div>
     <label>Endereço do seu backup (termina em /exec)<input id="dvI" type="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="https://script.google.com/macros/s/…/exec"></label>
     <div class="qa" style="margin-top:8px"><button id="dvS">Salvar e testar</button><button class="s" id="dvB">Fazer backup agora</button></div>
@@ -218,23 +218,27 @@ textarea{width:100%;padding:11px;border:1px solid var(--ln);border-radius:12px;b
       <li>Copie o <b>URL do app da Web</b> (termina em /exec), cole no campo acima e toque em <b>Salvar e testar</b>.</li></ol>
       <p class="mt">🔒 Não compartilhe esse endereço: quem tiver ele consegue ler seus backups.</p>
       <textarea id="dvC" rows="5" readonly>// Backup do app Minha Vida Financeira no seu Google Drive
-const PASTA = "Minha Vida Financeira - backups", MANTER = 30;
+// Guarda sempre o MESMO arquivo dentro da pasta (o Drive mantém as versões anteriores).
+const PASTA = "Minha Vida Financeira - backups", ARQ = "financas-backup.json";
 function pasta() { const it = DriveApp.getFoldersByName(PASTA); return it.hasNext() ? it.next() : DriveApp.createFolder(PASTA); }
 function resp(o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }
-function arquivos(f) { const l = [], it = f.getFiles(); while (it.hasNext()) l.push(it.next()); return l.sort((a, b) => b.getDateCreated() - a.getDateCreated()); }
+function arquivo(f) { const it = f.getFilesByName(ARQ); return it.hasNext() ? it.next() : null; }
+function limparAntigos(f) {
+  [f, DriveApp.getRootFolder()].forEach(p => { const it = p.getFiles(); while (it.hasNext()) { const x = it.next(); if (/^financas-\d{4}-\d{2}-\d{2}_\d{2}-\d{2}\.json$/.test(x.getName())) x.setTrashed(true); } });
+}
 function doGet() { return resp({ ok: true, app: "mvf" }); }
 function doPost(e) {
   const b = JSON.parse(e.postData.contents), f = pasta();
   if (b.a === "teste") return resp({ ok: true, pasta: PASTA });
   if (b.a === "salvar") {
-    const nome = "financas-" + Utilities.formatDate(new Date(), "America/Sao_Paulo", "yyyy-MM-dd_HH-mm") + ".json";
-    f.createFile(nome, b.d, "application/json");
-    arquivos(f).slice(MANTER).forEach(x => x.setTrashed(true));
-    return resp({ ok: true, nome: nome });
+    const x = arquivo(f);
+    if (x) x.setContent(b.d); else f.createFile(ARQ, b.d, "application/json");
+    limparAntigos(f);
+    return resp({ ok: true, nome: ARQ });
   }
   if (b.a === "ultimo") {
-    const l = arquivos(f); if (!l.length) return resp({ ok: false, erro: "Nenhum backup no Drive ainda" });
-    return resp({ ok: true, nome: l[0].getName(), d: l[0].getBlob().getDataAsString() });
+    const x = arquivo(f); if (!x) return resp({ ok: false, erro: "Nenhum backup no Drive ainda" });
+    return resp({ ok: true, nome: ARQ, d: x.getBlob().getDataAsString() });
   }
   return resp({ ok: false, erro: "acao" });
 }</textarea><button class="s" id="dvCp" style="margin-top:6px;width:100%">Copiar código</button></details></div>
@@ -687,7 +691,7 @@ $("dvB").onclick=()=>{$("dvO").innerHTML='<div class="mt">Salvando…</div>';dvB
 $("dvR").onclick=async e=>{const o=$("dvO");if(!sure(e.currentTarget,"Toque de novo: substitui os dados atuais"))return;o.innerHTML='<div class="mt">Buscando o último backup…</div>';
  try{const j=await dvCall("ultimo"),r=JSON.parse(j.d);if(!r||!Array.isArray(r.debts))throw new Error("Arquivo de backup inválido");
   S=Object.assign({debts:[],exp:[],fix:[],inc:0,goals:[],rem:[],name:"",strat:"bo"},r);S.rem=S.rem||[];$("inc").value=S.inc||"";$("nm").value=S.name||"";save();dSet(DA,String(S.at));render();
-  o.innerHTML='<div class="ok">✅ Restaurado de '+esc(j.nome)+': '+S.exp.length+' gastos, '+S.debts.length+' dívidas, '+S.fix.length+' contas fixas e '+S.goals.length+' metas.</div>'}
+  o.innerHTML='<div class="ok">✅ Restaurado do Drive: '+S.exp.length+' gastos, '+S.debts.length+' dívidas, '+S.fix.length+' contas fixas e '+S.goals.length+' metas.</div>'}
  catch(x){o.innerHTML='<div class="bad">Não consegui restaurar.<div class="mt" style="font-size:12px;margin-top:6px;word-break:break-word">Detalhe: '+esc(x.message)+'</div></div>'}};
 $("dvX").onclick=e=>{if(!sure(e.currentTarget,"Confirmar?"))return;[DU,DL,DA].forEach(k=>dSet(k,null));dvSt();$("dvO").innerHTML='<div class="mt">Backup automático desligado. Os arquivos que já estão no Drive continuam lá.</div>'};
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden")dvBackup(false)});
