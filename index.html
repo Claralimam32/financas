@@ -187,12 +187,17 @@ textarea{width:100%;padding:11px;border:1px solid var(--ln);border-radius:12px;b
     <textarea id="cq" rows="2" placeholder="Pergunte sobre as suas finanças"></textarea>
     <button id="cb" style="margin-top:8px;width:100%">Perguntar</button>
     <div id="co" style="margin-top:8px" aria-live="polite"></div>
-    <p class="mt">Para responder, os seus dados de gastos são enviados ao Claude. Confira os números importantes.</p></div>
+    <p class="mt">Para responder, os seus dados de gastos são enviados ao Google Gemini. No plano grátis, o Google pode usar o que é enviado para melhorar os produtos dele. Confira os números importantes.</p></div>
 </section>
 
 <section class="tab" id="t-mais">
   <div class="card"><h2>🔔 Avisos de vencimento</h2><p class="mt" style="margin-top:0">O celular avisa quando uma dívida ou conta fixa vence hoje, amanhã ou está atrasada.</p>
     <button id="ntB" style="width:100%">Ativar avisos</button><div id="ntO" class="mt" style="margin-top:8px" aria-live="polite"></div></div>
+  <div class="card"><h2>✨ IA (Google Gemini)</h2><p class="mt" style="margin-top:0">Crie uma chave grátis em <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style="color:var(--pu);font-weight:700">aistudio.google.com/apikey</a> e cole aqui. Ela fica guardada só neste celular.</p>
+    <label>Chave da API<input id="gkI" type="password" autocomplete="off" placeholder="Cole sua chave aqui"></label>
+    <details style="margin-top:8px"><summary style="font-size:13px">Avançado</summary><label style="margin-top:6px">Modelo<input id="gmI" placeholder="gemini-flash-latest"></label></details>
+    <div class="qa" style="margin-top:8px"><button id="gkS">Salvar e testar</button><button class="s" id="gkX" style="color:var(--rd)">Remover chave</button></div>
+    <div id="gkO" style="margin-top:8px" aria-live="polite"></div></div>
   <div class="card"><h2>Seu nome</h2><label>Como quer ser chamado(a)?<input id="nm" placeholder="Seu nome"></label></div>
   <div class="card"><h2>Seus dados</h2><p class="mt">Seus dados ficam salvos só neste celular, sem login e sem internet. Faça um backup de vez em quando (por exemplo, toda semana) e guarde o texto em lugar seguro.</p>
     <div class="qa"><button class="s" id="bk">Exportar backup</button><button class="s" id="rs" style="color:var(--rd)">Apagar tudo</button></div>
@@ -209,6 +214,7 @@ textarea{width:100%;padding:11px;border:1px solid var(--ln);border-radius:12px;b
   <button data-t="gastos"><span>👛</span>Gastos</button>
   <button data-t="dividas"><span>💳</span>Dívidas</button>
   <button data-t="metas"><span>🎯</span>Metas</button>
+  <button data-t="ia"><span>✨</span>IA</button>
   <button data-t="mais"><span>☰</span>Mais</button>
 </div></nav>
 
@@ -535,21 +541,32 @@ $("ed").value=today();$("rdt").value=today();if(S.inc)$("inc").value=S.inc;$("nm
 render();
 function sync(t){const e=$("sync");if(e)e.textContent=t}
 let smp=null;
-async function getSmp(){if(smp)return smp;try{smp=await claude.use("sample")}catch(e){}return smp}
+const GK="gemini.key",GM="gemini.model",gGet=k=>{try{return localStorage.getItem(k)||""}catch(e){return""}};
+async function gem(body){if(!navigator.onLine){const e=new Error("offline");e.code="offline";throw e}
+ const m=gGet(GM)||"gemini-flash-latest";
+ const r=await fetch("https://generativelanguage.googleapis.com/v1beta/models/"+encodeURIComponent(m)+":generateContent",{method:"POST",headers:{"Content-Type":"application/json","x-goog-api-key":gGet(GK)},body:JSON.stringify(body)});
+ const j=await r.json().catch(()=>({}));
+ if(!r.ok){const t=JSON.stringify(j),e=new Error(t);e.code=r.status===429?"rate_limited":/API_KEY|API key/i.test(t)?"bad_key":r.status===404?"no_model":"x";throw e}
+ const c=(j.candidates||[])[0];if(!c||!c.content){const e=new Error("vazio");e.code="blocked";throw e}
+ return (c.content.parts||[]).map(p=>p.text||"").join("")}
+async function getSmp(){if(!gGet(GK))return null;
+ const s=async(msgs,o)=>{const text=await gem({contents:msgs.map(m=>({role:m.role==="assistant"?"model":"user",parts:[{text:m.content}]}))});if(o&&o.onText)o.onText({text});return{text}};
+ s.json=async p=>{const t=await gem({contents:[{role:"user",parts:[{text:p}]}],generationConfig:{responseMimeType:"application/json"}});return JSON.parse(t.replace(/^```(json)?|```$/g,"").trim())};
+ return s}
 function ctx(){const c=calc(),m=ymOf(0);
  return JSON.stringify({hoje:today(),renda_mensal:S.inc,sobra_do_mes:c.left,estrategia:S.strat==="av"?"avalanche":"bola de neve",
   contas_fixas:S.fix.map(f=>({nome:f.name,valor:fxVal(f,m),dia:f.day,paga_no_mes:!!(f.paid||{})[m],forma:((f.paid||{})[m]||{}).pay})),
   dividas:S.debts.filter(d=>d.bal>0).map(d=>({nome:d.name,saldo:d.bal,juros_mes_pct:d.rate,parcela_min:d.min,dia:d.day})),
   gastos_ultimos_60_dias:S.exp.filter(e=>e.date>=fmt(addD(-60))).map(e=>({nome:e.name,valor:e.v,categoria:e.cat,forma:e.pay,parcelas:e.n||1,data:e.date})),
   metas:S.goals.map(g=>({nome:g.name,meta:g.target,juntado:g.saved}))})}
-const aiErr=e=>'<div class="bad">'+(e&&e.code==="not_granted"?"A permissão foi negada. Toque de novo e permita.":e&&e.code==="rate_limited"?"Muitos pedidos seguidos. Espere um pouco.":"Não consegui agora. Tente de novo em instantes.")+'</div>';
+const aiErr=e=>'<div class="bad">'+(e&&e.code==="offline"?"Sem internet agora. A IA precisa de conexão; o resto do app funciona offline.":e&&e.code==="bad_key"?"A chave do Gemini não funcionou. Confira em Mais › IA (Google Gemini).":e&&e.code==="no_model"?"Modelo do Gemini não encontrado. Confira o nome do modelo em Mais › IA.":e&&e.code==="blocked"?"O Gemini não respondeu a essa pergunta. Tente escrever de outro jeito.":e&&e.code==="not_granted"?"A permissão foi negada. Toque de novo e permita.":e&&e.code==="rate_limited"?"Muitos pedidos seguidos. Espere um pouco.":"Não consegui agora. Tente de novo em instantes.")+'</div>';
 const box=t=>'<div class="it" style="display:block;white-space:pre-wrap">'+esc(t)+'</div>';
 $("cb").onclick=async()=>{const q=$("cq").value.trim();if(!q)return;const o=$("co");o.innerHTML='<div class="mt">Pensando…</div>';
- const s=await getSmp();if(!s){o.innerHTML='<div class="bad">A IA não está disponível neste aparelho ou conta.</div>';return}
+ const s=await getSmp();if(!s){o.innerHTML='<div class="bad">Para usar a IA, cole sua chave grátis do Gemini em Mais › IA (Google Gemini).</div>';return}
  try{const r=await s([{role:"user",content:"Você é um assistente de finanças pessoais, simpático e direto, em português do Brasil. Responda em até 8 linhas, usando os números reais dos dados, sem inventar nada. Não recomende investimentos. Dados da pessoa (JSON): "+ctx()+"\n\nPergunta: "+q}],{cache:false,onText:t=>{o.innerHTML=box(t.text)}});
   o.innerHTML=box(r.text)}catch(e){o.innerHTML=aiErr(e)}};
 $("qb").onclick=async()=>{const q=$("qf").value.trim();if(!q)return;const o=$("qo");o.innerHTML='<div class="mt">Lendo…</div>';
- const s=await getSmp();if(!s){o.innerHTML='<div class="bad">A IA não está disponível neste aparelho ou conta.</div>';return}
+ const s=await getSmp();if(!s){o.innerHTML='<div class="bad">Para usar a IA, cole sua chave grátis do Gemini em Mais › IA (Google Gemini).</div>';return}
  try{const r=await s.json("Extraia UM gasto da frase, em português. Hoje é "+today()+". Responda SOMENTE um JSON: {\"nome\": texto curto, \"valor\": número em reais, \"categoria\": Transporte ou Alimentação ou Moradia ou Saúde ou Lazer ou Outros, \"pagamento\": Pix ou Débito ou Crédito ou Dinheiro, \"data\": \"YYYY-MM-DD\"}. Se a forma de pagamento não for dita, use Pix. Se a data não for dita, use hoje. Se não houver gasto na frase, responda {\"erro\": true}. Frase: "+q,{cache:false});
   if(!r||r.erro||!(Number(r.valor)>0)){o.innerHTML='<div class="bad">Não achei um gasto nessa frase. Tente: gastei 35 no Uber, no Pix.</div>';return}
   const cats=["Transporte","Alimentação","Moradia","Saúde","Lazer","Outros"],pays=["Pix","Débito","Crédito","Dinheiro"];
@@ -586,6 +603,15 @@ async function avAgendar(){try{const reg=await navigator.serviceWorker.ready;if(
 $("ntB").onclick=async()=>{if(Notification.permission!=="granted"){const r=await Notification.requestPermission();avStatus();if(r==="granted"){avAgendar();const n=await avMostrar(true);$("ntO").innerHTML+=n?"":"<br>Nada vencendo hoje ou amanhã agora."}return}
  const n=await avMostrar(true);if(!n){const reg=await navigator.serviceWorker.ready;reg.showNotification("Avisos funcionando ✅",{body:"Nada vencendo hoje ou amanhã.",icon:"icon-192.png"})}};
 const _render=render;render=function(){_render();avGuardar()};avGuardar();
+// ---------- Chave do Gemini ----------
+function gkSt(){const k=gGet(GK);$("gkI").value="";$("gkI").placeholder=k?"Chave salva (…"+k.slice(-4)+")":"Cole sua chave aqui";$("gmI").value=gGet(GM);$("gkX").hidden=!k}
+$("gkS").onclick=async()=>{const k=$("gkI").value.trim(),m=$("gmI").value.trim(),o=$("gkO");
+ try{if(k)localStorage.setItem(GK,k);if(m)localStorage.setItem(GM,m);else localStorage.removeItem(GM)}catch(e){}
+ if(!gGet(GK)){o.innerHTML='<div class="bad">Cole a chave primeiro.</div>';return}
+ gkSt();o.innerHTML='<div class="mt">Testando…</div>';
+ try{await gem({contents:[{role:"user",parts:[{text:"Responda só: ok"}]}]});o.innerHTML='<div class="ok">✅ IA funcionando! Use a aba IA.</div>'}catch(e){o.innerHTML=aiErr(e)}};
+$("gkX").onclick=()=>{if(!sure($("gkX"),"Confirmar?"))return;try{localStorage.removeItem(GK)}catch(e){}gkSt();$("gkO").innerHTML='<div class="mt">Chave removida deste celular.</div>'};
+gkSt();
 // ---------- Modo offline ----------
 if("serviceWorker" in navigator){navigator.serviceWorker.register("sw.js").then(()=>{avStatus();avAgendar();avGuardar();avMostrar(false)}).catch(()=>avStatus())}else avStatus();
 </script>
