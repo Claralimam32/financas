@@ -200,9 +200,44 @@ textarea{width:100%;padding:11px;border:1px solid var(--ln);border-radius:12px;b
     <div class="qa" style="margin-top:8px"><button id="gkS">Salvar e testar</button><button class="s" id="gkX" style="color:var(--rd)">Remover chave</button></div>
     <div id="gkO" style="margin-top:8px" aria-live="polite"></div></div>
   <div class="card"><h2>Seu nome</h2><label>Como quer ser chamado(a)?<input id="nm" placeholder="Seu nome"></label></div>
-  <div class="card"><h2>Seus dados</h2><p class="mt">Seus dados ficam salvos só neste celular, sem login e sem internet. Faça um backup de vez em quando (por exemplo, toda semana) e guarde o texto em lugar seguro.</p>
+  <div class="card"><h2>Seus dados</h2><p class="mt">Seus dados ficam salvos neste celular. Ligue o backup automático no Google Drive (abaixo) ou exporte um backup de vez em quando e guarde em lugar seguro.</p>
     <div class="qa"><button class="s" id="bk">Exportar backup</button><button class="s" id="rs" style="color:var(--rd)">Apagar tudo</button></div>
     <div id="bkW" hidden style="margin-top:10px"><label>Seu backup (copie e guarde)<textarea id="bkT" rows="5" readonly></textarea></label><button id="bkC" style="margin-top:6px;width:100%">Copiar backup</button></div></div>
+  <div class="card"><h2>☁️ Backup automático no Google Drive</h2><p class="mt" style="margin-top:0">Igual ao WhatsApp: o app guarda uma cópia dos seus dados no <b>seu</b> Google Drive sozinho (ao abrir e ao sair do app, quando algo mudou). Fica na pasta “Minha Vida Financeira - backups”, com os 30 últimos.</p>
+    <div id="dvM" style="margin-bottom:8px"></div>
+    <label>Endereço do seu backup (termina em /exec)<input id="dvI" type="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="https://script.google.com/macros/s/…/exec"></label>
+    <div class="qa" style="margin-top:8px"><button id="dvS">Salvar e testar</button><button class="s" id="dvB">Fazer backup agora</button></div>
+    <div class="qa" style="margin-top:6px"><button class="s" id="dvR">Restaurar do Drive</button><button class="s" id="dvX" style="color:var(--rd)">Desligar</button></div>
+    <div id="dvO" style="margin-top:8px" aria-live="polite"></div>
+    <details style="margin-top:10px"><summary style="font-size:13px">Como configurar (uma vez só, ~5 min)</summary><ol class="mt" style="padding-left:18px;line-height:1.5">
+      <li>Toque em <b>Copiar código</b> abaixo.</li>
+      <li>Abra <a href="https://script.google.com/home/projects/create" target="_blank" rel="noopener" style="color:var(--pu);font-weight:700">script.google.com</a> (no celular, ative “Site para computador” no menu ⋮ do Chrome) e entre com sua conta Google.</li>
+      <li>Apague o que estiver escrito, cole o código e toque em 💾 Salvar.</li>
+      <li>Toque em <b>Implantar › Nova implantação</b> › engrenagem › <b>App da Web</b>. Em “Executar como”: <b>Eu</b>. Em “Quem pode acessar”: <b>Qualquer pessoa</b>. Toque em <b>Implantar</b>.</li>
+      <li>O Google pede permissão: <b>Autorizar acesso</b> › sua conta › “Avançado” › “Acessar (não seguro)” › <b>Permitir</b>. É seguro: o código é seu e só mexe nessa pasta.</li>
+      <li>Copie o <b>URL do app da Web</b> (termina em /exec), cole no campo acima e toque em <b>Salvar e testar</b>.</li></ol>
+      <p class="mt">🔒 Não compartilhe esse endereço: quem tiver ele consegue ler seus backups.</p>
+      <textarea id="dvC" rows="5" readonly>// Backup do app Minha Vida Financeira no seu Google Drive
+const PASTA = "Minha Vida Financeira - backups", MANTER = 30;
+function pasta() { const it = DriveApp.getFoldersByName(PASTA); return it.hasNext() ? it.next() : DriveApp.createFolder(PASTA); }
+function resp(o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }
+function arquivos(f) { const l = [], it = f.getFiles(); while (it.hasNext()) l.push(it.next()); return l.sort((a, b) => b.getDateCreated() - a.getDateCreated()); }
+function doGet() { return resp({ ok: true, app: "mvf" }); }
+function doPost(e) {
+  const b = JSON.parse(e.postData.contents), f = pasta();
+  if (b.a === "teste") return resp({ ok: true, pasta: PASTA });
+  if (b.a === "salvar") {
+    const nome = "financas-" + Utilities.formatDate(new Date(), "America/Sao_Paulo", "yyyy-MM-dd_HH-mm") + ".json";
+    f.createFile(nome, b.d, "application/json");
+    arquivos(f).slice(MANTER).forEach(x => x.setTrashed(true));
+    return resp({ ok: true, nome: nome });
+  }
+  if (b.a === "ultimo") {
+    const l = arquivos(f); if (!l.length) return resp({ ok: false, erro: "Nenhum backup no Drive ainda" });
+    return resp({ ok: true, nome: l[0].getName(), d: l[0].getBlob().getDataAsString() });
+  }
+  return resp({ ok: false, erro: "acao" });
+}</textarea><button class="s" id="dvCp" style="margin-top:6px;width:100%">Copiar código</button></details></div>
   <div class="card"><h2>Importar backup</h2><p class="mt">Cole aqui o backup exportado (de outro aparelho ou outra conta). Isso substitui os dados atuais.</p>
     <textarea id="imT" rows="4" placeholder='Cole o texto que começa com {"debts":...'></textarea>
     <label style="margin-top:8px">Ou escolha o arquivo de backup (.json)<input type="file" id="imF" accept=".json,application/json,text/plain,*/*"></label>
@@ -621,6 +656,44 @@ $("gkS").onclick=async()=>{const k=$("gkI").value.trim(),m=$("gmI").value.trim()
  try{await gem({contents:[{role:"user",parts:[{text:"Responda só: ok"}]}]},45000);o.innerHTML='<div class="ok">✅ IA funcionando! Use a aba IA.</div>'}catch(e){o.innerHTML=aiErr(e)}};
 $("gkX").onclick=()=>{if(!sure($("gkX"),"Confirmar?"))return;try{localStorage.removeItem(GK)}catch(e){}gkSt();$("gkO").innerHTML='<div class="mt">Chave removida deste celular.</div>'};
 gkSt();
+
+// ---------- Backup automático no Google Drive ----------
+const DU="drive.url",DL="drive.last",DA="drive.at",dSet=(k,v)=>{try{v==null?localStorage.removeItem(k):localStorage.setItem(k,v)}catch(e){}};
+let dvBusy=false;
+async function dvCall(a,extra){const u=gGet(DU);if(!u){const e=new Error("Configure o endereço primeiro");e.code="cfg";throw e}
+ if(!navigator.onLine){const e=new Error("Sem internet agora");e.code="offline";throw e}
+ const ac=new AbortController(),tm=setTimeout(()=>ac.abort(),60000);
+ try{const r=await fetch(u,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(Object.assign({a},extra||{})),signal:ac.signal,redirect:"follow"});
+  const t=await r.text();let j;try{j=JSON.parse(t)}catch(x){throw new Error(/<html/i.test(t)?"O Google devolveu uma página em vez do backup. Confira se “Quem pode acessar” está como Qualquer pessoa e se o endereço termina em /exec":"Resposta estranha: "+t.slice(0,120))}
+  if(!j.ok)throw new Error(j.erro||"Erro no script");return j}
+ catch(x){if(ac.signal.aborted)throw new Error("O Google demorou demais (60 s)");if(x.message==="Failed to fetch")throw new Error("Não consegui falar com o Google. Confira o endereço e a internet");throw x}
+ finally{clearTimeout(tm)}}
+function dvSt(){const u=gGet(DU),l=+gGet(DL)||0;$("dvI").value="";$("dvI").placeholder=u?"Para trocar, cole um endereço novo":"https://script.google.com/macros/s/…/exec";
+ ["dvB","dvR","dvX"].forEach(i=>$(i).hidden=!u);
+ $("dvM").innerHTML=!u?'<div class="mt">Desligado. Veja “Como configurar” abaixo.</div>':'<div class="ok">☁️ Ligado'+(l?' · último backup: <b>'+esc(new Date(l).toLocaleString("pt-BR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}))+'</b>'+((+gGet(DA)||0)!==(S.at||0)?' (há mudanças ainda não salvas)':''):' · ainda sem backup')+'</div>'}
+async function dvBackup(manual){if(dvBusy||!gGet(DU))return;const at=S.at||0;
+ if(!manual&&(+gGet(DA)||0)===at)return; // nada mudou
+ dvBusy=true;try{await dvCall("salvar",{d:JSON.stringify(S)});dSet(DL,String(Date.now()));dSet(DA,String(at));if(manual)$("dvO").innerHTML='<div class="ok">✅ Backup salvo no seu Drive.</div>'}
+ catch(e){if(manual)$("dvO").innerHTML='<div class="bad">Não consegui fazer o backup.<div class="mt" style="font-size:12px;margin-top:6px;word-break:break-word">Detalhe: '+esc(e.message)+'</div></div>'}
+ finally{dvBusy=false;dvSt()}}
+$("dvCp").onclick=async e=>{const b=e.currentTarget;try{await navigator.clipboard.writeText($("dvC").value);b.textContent="Copiado ✓"}catch(x){$("dvC").select();b.textContent="Selecionei: copie manualmente"}setTimeout(()=>b.textContent="Copiar código",3000)};
+$("dvS").onclick=async()=>{const v=$("dvI").value.trim(),o=$("dvO");
+ if(v){if(!/^https:\/\/script\.google(usercontent)?\.com\/.+\/exec$/.test(v)){o.innerHTML='<div class="bad">Esse endereço não parece certo. Ele começa com https://script.google.com/macros/s/ e termina em /exec.</div>';return}dSet(DU,v)}
+ if(!gGet(DU)){o.innerHTML='<div class="bad">Cole o endereço no campo acima primeiro.</div>';return}
+ dvSt();o.innerHTML='<div class="mt">Testando…</div>';
+ try{await dvCall("teste");dSet(DA,null);o.innerHTML='<div class="ok">✅ Conectado ao seu Drive! Fazendo o primeiro backup…</div>';await dvBackup(true)}
+ catch(e){o.innerHTML='<div class="bad">Não consegui conectar.<div class="mt" style="font-size:12px;margin-top:6px;word-break:break-word">Detalhe: '+esc(e.message)+'</div></div>'}};
+$("dvB").onclick=()=>{$("dvO").innerHTML='<div class="mt">Salvando…</div>';dvBackup(true)};
+$("dvR").onclick=async e=>{const o=$("dvO");if(!sure(e.currentTarget,"Toque de novo: substitui os dados atuais"))return;o.innerHTML='<div class="mt">Buscando o último backup…</div>';
+ try{const j=await dvCall("ultimo"),r=JSON.parse(j.d);if(!r||!Array.isArray(r.debts))throw new Error("Arquivo de backup inválido");
+  S=Object.assign({debts:[],exp:[],fix:[],inc:0,goals:[],rem:[],name:"",strat:"bo"},r);S.rem=S.rem||[];$("inc").value=S.inc||"";$("nm").value=S.name||"";save();dSet(DA,String(S.at));render();
+  o.innerHTML='<div class="ok">✅ Restaurado de '+esc(j.nome)+': '+S.exp.length+' gastos, '+S.debts.length+' dívidas, '+S.fix.length+' contas fixas e '+S.goals.length+' metas.</div>'}
+ catch(x){o.innerHTML='<div class="bad">Não consegui restaurar.<div class="mt" style="font-size:12px;margin-top:6px;word-break:break-word">Detalhe: '+esc(x.message)+'</div></div>'}};
+$("dvX").onclick=e=>{if(!sure(e.currentTarget,"Confirmar?"))return;[DU,DL,DA].forEach(k=>dSet(k,null));dvSt();$("dvO").innerHTML='<div class="mt">Backup automático desligado. Os arquivos que já estão no Drive continuam lá.</div>'};
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden")dvBackup(false)});
+window.addEventListener("online",()=>dvBackup(false));
+setInterval(()=>dvBackup(false),15*60*1000);setTimeout(()=>dvBackup(false),4000);
+dvSt();
 // ---------- Modo offline ----------
 if("serviceWorker" in navigator){let tinha=!!navigator.serviceWorker.controller,rec=false;
  navigator.serviceWorker.addEventListener("controllerchange",()=>{if(tinha&&!rec){rec=true;location.reload()}});
